@@ -1,0 +1,10 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: server-go:dev
+    container_name: server-go
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
