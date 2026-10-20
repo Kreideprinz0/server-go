@@ -2,21 +2,45 @@ package handlers
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 
 	"server-go/storage"
 )
 
-// newTestServer поднимает mux + роуты поверх чистого Storage
-func newTestServer() *httptest.Server {
-	store := storage.New()
+func newTestServer(t *testing.T) (*httptest.Server, *storage.Storage) {
+	t.Helper()
+
+	dbURL := os.Getenv("DATABASE_URL")
+	if dbURL == "" {
+		t.Fatal("DATABASE_URL is not set")
+	}
+
+	store, err := storage.New(dbURL)
+	if err != nil {
+		t.Fatalf("failed to connect to db: %v", err)
+	}
+
+	if err := store.Migrate(context.Background()); err != nil {
+		t.Fatalf("failed to migrate: %v", err)
+	}
+
+	// Очищаем базу перед тестом
+	_, err = store.ExecRaw("TRUNCATE items RESTART IDENTITY")
+	if err != nil {
+		t.Fatalf("truncate items %v", err)
+	}
+
 	h := New(store)
 	mux := http.NewServeMux()
 	h.Routes(mux)
-	return httptest.NewServer(mux)
+
+	srv := httptest.NewServer(mux)
+	return srv, store
 }
 
 func doJSON(t *testing.T, method, url string, body any) (*http.Response, []byte) {
@@ -48,8 +72,9 @@ func doJSON(t *testing.T, method, url string, body any) (*http.Response, []byte)
 }
 
 func TestAPI_FullCRUDCycle(t *testing.T) {
-	srv := newTestServer()
+	srv, store := newTestServer(t)
 	defer srv.Close()
+	defer store.Close()
 
 	// 1. Пустой список
 	resp, body := doJSON(t, http.MethodGet, srv.URL+"/items", nil)
@@ -104,8 +129,9 @@ func TestAPI_FullCRUDCycle(t *testing.T) {
 }
 
 func TestAPI_CreateValidation(t *testing.T) {
-	srv := newTestServer()
+	srv, store := newTestServer(t)
 	defer srv.Close()
+	defer store.Close()
 
 	cases := []struct {
 		name string
@@ -126,8 +152,9 @@ func TestAPI_CreateValidation(t *testing.T) {
 }
 
 func TestAPI_InvalidID(t *testing.T) {
-	srv := newTestServer()
+	srv, store := newTestServer(t)
 	defer srv.Close()
+	defer store.Close()
 
 	resp, body := doJSON(t, http.MethodGet, srv.URL+"/items/abc", nil)
 	if resp.StatusCode != http.StatusBadRequest {

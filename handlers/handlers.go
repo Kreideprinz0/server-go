@@ -9,7 +9,6 @@ import (
 	"server-go/storage"
 )
 
-// Handler - обёртка над хранилищем
 type Handler struct {
 	store *storage.Storage
 }
@@ -18,7 +17,6 @@ func New(store *storage.Storage) *Handler {
 	return &Handler{store: store}
 }
 
-// Routes регистрирует все маршруты
 func (h *Handler) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /items", h.list)
 	mux.HandleFunc("GET /items/{id}", h.get)
@@ -26,8 +24,6 @@ func (h *Handler) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /items/{id}", h.update)
 	mux.HandleFunc("DELETE /items/{id}", h.delete)
 }
-
-// вспомогательные функции
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
@@ -43,14 +39,15 @@ func parseID(r *http.Request) (int, error) {
 	return strconv.Atoi(r.PathValue("id"))
 }
 
-// HTTP-обработчики
-
-// GET /items
 func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, h.store.List())
+	items, err := h.store.List(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, items)
 }
 
-// GET /items/{id}
 func (h *Handler) get(w http.ResponseWriter, r *http.Request) {
 	id, err := parseID(r)
 	if err != nil {
@@ -58,7 +55,7 @@ func (h *Handler) get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	item, err := h.store.Get(id)
+	item, err := h.store.Get(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "item not found")
@@ -71,7 +68,6 @@ func (h *Handler) get(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, item)
 }
 
-// POST /items
 func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Name  string `json:"name"`
@@ -87,11 +83,14 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	item := h.store.Create(req.Name, req.Price)
+	item, err := h.store.Create(r.Context(), req.Name, req.Price)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 	writeJSON(w, http.StatusCreated, item)
 }
 
-// PUT /items/{id}
 func (h *Handler) update(w http.ResponseWriter, r *http.Request) {
 	id, err := parseID(r)
 	if err != nil {
@@ -108,7 +107,7 @@ func (h *Handler) update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	item, err := h.store.Update(id, req.Name, req.Price)
+	item, err := h.store.Update(r.Context(), id, req.Name, req.Price)
 	if err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "item not found")
@@ -121,7 +120,6 @@ func (h *Handler) update(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, item)
 }
 
-// DELETE /items/{id}
 func (h *Handler) delete(w http.ResponseWriter, r *http.Request) {
 	id, err := parseID(r)
 	if err != nil {
@@ -129,7 +127,7 @@ func (h *Handler) delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.store.Delete(id); err != nil {
+	if err := h.store.Delete(r.Context(), id); err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "item not found")
 			return

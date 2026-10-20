@@ -15,9 +15,28 @@ import (
 )
 
 func main() {
-	store := storage.New()
-	h := handlers.New(store)
+	// Берем строку подключения из переменных окружения (Docker Compose передаст её)
+	dbURL := os.Getenv("DATABASE_URL")
+	if dbURL == "" {
+		// Значение по умолчанию для локального запуска (если запускаем go run . без докера)
+		dbURL = "postgres://app_user:app_password@localhost:5432/app_db?sslmode=disable"
+	}
 
+	// 1. Подключаемся к БД
+	store, err := storage.New(dbURL)
+	if err != nil {
+		log.Fatalf("failed to connect to db: %v", err)
+	}
+	defer store.Close()
+
+	// 2. Применяем миграции (создаем таблицу)
+	if err := store.Migrate(context.Background()); err != nil {
+		log.Fatalf("failed to migrate db: %v", err)
+	}
+	log.Println("db connected and migrated")
+
+	// 3. Настраиваем HTTP
+	h := handlers.New(store)
 	mux := http.NewServeMux()
 	h.Routes(mux)
 
@@ -28,7 +47,6 @@ func main() {
 		WriteTimeout: 10 * time.Second,
 	}
 
-	// Запуск сервера в отдельной горутине
 	go func() {
 		log.Println("server started on :8080")
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -36,7 +54,7 @@ func main() {
 		}
 	}()
 
-	// Graceful shutdown по Ctrl+C / SIGTERM
+	// 4. Graceful shutdown
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 	<-stop
@@ -51,7 +69,6 @@ func main() {
 	log.Println("server stopped")
 }
 
-// logging - middleware, логирующий каждый запрос
 func logging(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
