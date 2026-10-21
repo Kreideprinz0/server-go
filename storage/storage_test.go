@@ -21,10 +21,6 @@ func newTestStorage(t *testing.T) *Storage {
 		t.Fatalf("failed to connect to db: %v", err)
 	}
 
-	// if err := s.Migrate(context.Background()); err != nil {
-	// 	t.Fatalf("failed to migrate: %v", err)
-	// }
-
 	// Очищаем таблицу перед каждым тестом (чтобы ID начинались с 1)
 	_, err = s.db.ExecContext(context.Background(), "TRUNCATE items RESTART IDENTITY")
 	if err != nil {
