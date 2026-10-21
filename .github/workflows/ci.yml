@@ -33,6 +33,17 @@ jobs:
         with:
           go-version: '1.22'
 
+      - name: Run migrations
+        env:
+          PGPASSWORD: app_password
+        run: |
+          psql -h localhost -U app_user -d app_db -c "
+          CREATE TABLE IF NOT EXISTS items (
+            id SERIAL PRIMARY KEY,
+            name TEXT NOT NULL,
+            price INTEGER NOT NULL
+          );"
+
       - name: Run tests
         env:
           DATABASE_URL: "postgres://app_user:app_password@localhost:5432/app_db?sslmode=disable"

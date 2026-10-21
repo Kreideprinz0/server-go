@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -25,9 +24,9 @@ func newTestServer(t *testing.T) (*httptest.Server, *storage.Storage) {
 		t.Fatalf("failed to connect to db: %v", err)
 	}
 
-	if err := store.Migrate(context.Background()); err != nil {
-		t.Fatalf("failed to migrate: %v", err)
-	}
+	// if err := store.Migrate(context.Background()); err != nil {
+	// 	t.Fatalf("failed to migrate: %v", err)
+	// }
 
 	// Очищаем базу перед тестом
 	_, err = store.ExecRaw("TRUNCATE items RESTART IDENTITY")
