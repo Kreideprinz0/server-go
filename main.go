@@ -15,10 +15,8 @@ import (
 )
 
 func main() {
-	// Берем строку подключения из переменных окружения (Docker Compose передаст её)
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
-		// Значение по умолчанию для локального запуска (если запускаем go run . без докера)
 		dbURL = "postgres://app_user:app_password@localhost:5432/app_db?sslmode=disable"
 	}
 
